@@ -1,0 +1,14 @@
+# device_type: ALCATEL
+package_handler:
+  <<: *PACKAGE_HANDLER
+
+workloads:
+  - <<: *SHOW_VERSION
+  - <<: *SHOW_IP_ROUTE_VRF_ALL
+  - <<: *SHOW_INTERFACE
+  - <<: *SHOW_ROUTER_INTERFACES
+  - <<: *SHOW_VRF_ALL
+
+
+result_writer:
+  <<: *RESULT_WRITER

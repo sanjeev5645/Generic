@@ -1,0 +1,96 @@
+vertical_table_parser: &VERTICAL_TABLE_PARSER network_insight_sdk_generic_datasources.parsers.common.vertical_table_parser.VerticalTableParser
+horizontal_table_parser: &HORIZONTAL_TABLE_PARSER network_insight_sdk_generic_datasources.parsers.common.horizontal_table_parser.HorizontalTableParser
+generic_text_parser: &GENERIC_TEXT_PARSER network_insight_sdk_generic_datasources.parsers.common.text_parser.GenericTextParser
+generation_directory: &GENERATION_DIRECTORY /tmp/uani
+
+n5k:
+  package_handler: &PACKAGE_HANDLER
+  name: ZipPackageHandler
+
+# workloads added will be executed in sequence
+  workloads: &WORKLOADS
+    - &SHOW_VERSION
+      table_id: switch
+      command: show system
+      parser:
+        name: *GENERIC_TEXT_PARSER
+        arguments:
+          rules:
+            name: '^Name:\s+(.*),'
+            os: '.*(\d+\.\d+\..*GA),.*'
+            model: '.*Enterprise\s(.*)\s\d\..*'
+            vendor: '^Description:\s+(.*Enterprise)\s.*,.*,'
+            hostname: '^Name:\s+(.*),'
+            serial: '^Location:\s+(.*),'
+
+    - &SHOW_IP_ROUTE_VRF_ALL
+      table_id: routes
+      command: show ip routes
+      parser:
+        pre_post_processor: AlcatelPostRoute
+        name: *HORIZONTAL_TABLE_PARSER
+        arguments:
+          skip_head: 6
+          skip_tail: 1
+          header_keys:
+            - network
+            - nextHop
+            - age
+            - routeType
+
+    - &SHOW_INTERFACE
+      table_id: showSwitchPorts
+      command: show interfaces
+      block_parser:
+        name: GenericBlockParser
+        arguments:
+          line_pattern: '^Chassis'
+      parser:
+        pre_post_processor: AlcatelPostSwitchPort
+        name: *GENERIC_TEXT_PARSER
+        arguments:
+          rules:
+            name: '^Chassis.*(\d+\/\d+\/\d+).*'
+            connected: '\s?Operational.*(up|down),'
+            administrativeStatus: '\s?Operational.*(up|down),'
+            operationalStatus: '\s?Operational.*(up|down),'
+            hardwareAddress: '\s?MAC.*:\s(\w{2}:\w{2}:\w{2}:\w{2}:\w{2}:\w{2}),'
+            mtu: '\s?Long\sFrame\sSize\(Bytes\)\s*:\s(\d+),'
+            duplex: '\s?BandWidth.*Duplex\s+:\s+(\w+),'
+            switchPortMode: '\s?Type\s*:\s*(\w+),'
+          
+    - &SHOW_ROUTER_INTERFACES
+      table_id: showRouterInterfaces
+      command: show ip interface
+      parser:
+        pre_post_processor: AlcatelPostRouterInterface
+        name: *HORIZONTAL_TABLE_PARSER
+        arguments:
+          header_keys:
+            - name
+            - ipAddress
+            - Subnet Mask
+            - administrativeStatus
+            - operationalStatus
+
+    - &SHOW_VRF_ALL
+      table_id: vrfs
+      command: show vrf
+      parser:
+        name: *HORIZONTAL_TABLE_PARSER
+        arguments:
+          skip_head: 2
+          skip_tail: 2
+          header_keys:
+            - name
+      select_columns:
+        name: name
+      
+  result_writer: &RESULT_WRITER
+    name: CsvWriter
+    table_id:
+      - switch
+      - routes
+      - vrfs
+      - router-interfaces
+      - switch-ports
